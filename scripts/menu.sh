@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 
 CURRENT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-# Function to check if the current session name matches "scratch"
+# Function to check if we're currently in a floax session
 check_current_session() {
     current_session=$(tmux display-message -p '#{session_name}')
-    if [ "$current_session" != "$FLOAX_SESSION_NAME" ]; then
+    # Check if we're NOT in any floax session
+    if [[ "$current_session" != floax-* ]]; then
         tmux menu \
-            "pop current window" p "run \"$CURRENT_DIR/embed.sh pop\"" 
+            "pop current window" p "run \"$CURRENT_DIR/embed.sh pop\""
         exit 0
     fi
 }

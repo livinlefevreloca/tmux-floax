@@ -4,6 +4,22 @@ envvar_value() {
     tmux showenv -g "$1" | cut -d '=' -f 2-
 }
 
+# Generate a session name based on the current directory
+# Uses the last 2 path components, sanitized
+generate_session_name() {
+    local current_path="$1"
+    local depth="${2:-2}"  # Default to last 2 components
+
+    # Get last N components of the path
+    local session_suffix=$(echo "$current_path" | awk -F/ -v n="$depth" '{for(i=NF-n+1;i<=NF;i++){printf "%s", $i; if(i<NF)printf "-"}}')
+
+    # Sanitize: replace any non-alphanumeric chars with hyphens
+    session_suffix=$(echo "$session_suffix" | tr -cs '[:alnum:]-' '-' | sed 's/^-//;s/-$//')
+
+    # Return prefixed session name
+    echo "floax-${session_suffix}"
+}
+
 tmux_option_or_fallback() {
 	local option_value
 	option_value="$(tmux show-option -gqv "$1")"
@@ -66,16 +82,16 @@ is_tmux_version_supported() {
 }
 
 tmux_popup() {
-    # TODO: make this optional:
+    # Get current directory and generate session name
     current_dir=$(tmux display -p '#{pane_current_path}')
-    scratch_path=$(tmux display -t scratch -p '#{pane_current_path}')
-    if [ "$scratch_path" != "$current_dir" ] && [ "$FLOAX_CHANGE_PATH" = "true" ]; then
-        tmux send-keys -R -t "$FLOAX_SESSION_NAME" " cd $current_dir" C-m
-    fi
+    FLOAX_SESSION_NAME=$(generate_session_name "$current_dir")
+
+    # Store the session name globally for other functions to use
+    tmux setenv -g FLOAX_SESSION_NAME "$FLOAX_SESSION_NAME"
 
     if is_tmux_version_supported; then
         if ! pop; then
-            tmux setenv -g FLOAX_WIDTH "$(tmux_option_or_fallback '@floax-width' '80%')" 
+            tmux setenv -g FLOAX_WIDTH "$(tmux_option_or_fallback '@floax-width' '80%')"
             tmux setenv -g FLOAX_HEIGHT "$(tmux_option_or_fallback '@floax-height' '80%')"
             pop
         fi

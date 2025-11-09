@@ -3,6 +3,10 @@
 CURRENT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$CURRENT_DIR/utils.sh"
 
+# Load environment variables before using them
+ORIGIN_SESSION="$(envvar_value ORIGIN_SESSION)"
+FLOAX_SESSION_NAME="$(envvar_value FLOAX_SESSION_NAME)"
+
 embed() {
     unset_bindings
     number_of_windows=$(tmux list-windows -t "$FLOAX_SESSION_NAME" | wc -l)
@@ -30,5 +34,3 @@ case "$action" in
         pop
         ;;
 esac
-
-ORIGIN_SESSION="$(envvar_value ORIGIN_SESSION)"
