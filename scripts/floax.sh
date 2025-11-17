@@ -297,28 +297,12 @@ else
         else
             echo "[$(date '+%H:%M:%S')] Multiple sessions exist" >> "$DEBUG_FILE"
             debug_log "Multiple sessions exist"
-            # Multiple sessions exist, let user choose with fzf
-            if command -v fzf >/dev/null 2>&1; then
-                echo "[$(date '+%H:%M:%S')] fzf is available, showing selector" >> "$DEBUG_FILE"
-                debug_log "Using fzf to select"
-                FLOAX_SESSION_NAME=$(echo "$matching_sessions" | fzf \
-                    --prompt="Select floax session: " \
-                    --height=80% \
-                    --reverse \
-                    --preview="tmux capture-pane -ep -t {}" \
-                    --preview-window=right:60%)
-                echo "[$(date '+%H:%M:%S')] fzf returned: $FLOAX_SESSION_NAME" >> "$DEBUG_FILE"
-                if [ -z "$FLOAX_SESSION_NAME" ]; then
-                    echo "[$(date '+%H:%M:%S')] User cancelled fzf, exiting" >> "$DEBUG_FILE"
-                    # User cancelled fzf, exit
-                    exit 0
-                fi
-            else
-                echo "[$(date '+%H:%M:%S')] fzf not available, using first session" >> "$DEBUG_FILE"
-                debug_log "fzf not available, using first session"
-                # fzf not available, just use the first one
-                FLOAX_SESSION_NAME=$(echo "$matching_sessions" | head -n 1)
-            fi
+            # Multiple sessions exist
+            # When invoked via keybinding (no explicit -a flag), just use the first session
+            # fzf doesn't work properly in run-shell context
+            echo "[$(date '+%H:%M:%S')] Using first session (fzf only works with -a flag)" >> "$DEBUG_FILE"
+            debug_log "Using first session from multiple matches"
+            FLOAX_SESSION_NAME=$(echo "$matching_sessions" | head -n 1)
         fi
         echo "[$(date '+%H:%M:%S')] Final FLOAX_SESSION_NAME after matching logic: $FLOAX_SESSION_NAME" >> "$DEBUG_FILE"
         debug_log "Final FLOAX_SESSION_NAME after matching logic: $FLOAX_SESSION_NAME"
