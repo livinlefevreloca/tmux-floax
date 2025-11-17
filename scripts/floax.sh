@@ -173,10 +173,13 @@ if [ "$replace" = true ]; then
 fi
 
 # Determine final session name
+echo "[$(date '+%H:%M:%S')] Determining final session name" >> "$DEBUG_FILE"
 if [ "$replace" = true ]; then
+    echo "[$(date '+%H:%M:%S')] Replace is true, FLOAX_SESSION_NAME already set" >> "$DEBUG_FILE"
     # Already handled above, FLOAX_SESSION_NAME is set
     :
 elif [ "$list_all" = true ]; then
+    echo "[$(date '+%H:%M:%S')] List all is true" >> "$DEBUG_FILE"
     # List all tmux sessions and let user choose
     all_sessions=$(tmux list-sessions -F "#{session_name}" 2>/dev/null)
 
@@ -201,9 +204,11 @@ elif [ "$list_all" = true ]; then
         fi
     fi
 elif [ -n "$custom_session" ]; then
+    echo "[$(date '+%H:%M:%S')] Custom session specified: $custom_session" >> "$DEBUG_FILE"
     base_session_name="$custom_session"
 
     if [ "$force_new" = true ]; then
+        echo "[$(date '+%H:%M:%S')] Force new with custom session" >> "$DEBUG_FILE"
         # Force create a new numbered session
         next_num=$(find_next_session_number "$base_session_name")
         if [ "$next_num" -eq 0 ]; then
@@ -212,14 +217,18 @@ elif [ -n "$custom_session" ]; then
             FLOAX_SESSION_NAME="${base_session_name}-${next_num}"
         fi
     else
+        echo "[$(date '+%H:%M:%S')] Using custom session name as-is" >> "$DEBUG_FILE"
         FLOAX_SESSION_NAME="$base_session_name"
     fi
 else
+    echo "[$(date '+%H:%M:%S')] No custom session, generating from directory" >> "$DEBUG_FILE"
     debug_log "Calling generate_session_name with: $current_dir"
     base_session_name=$(generate_session_name "$current_dir")
+    echo "[$(date '+%H:%M:%S')] base_session_name result: $base_session_name" >> "$DEBUG_FILE"
     debug_log "base_session_name result: $base_session_name"
 
     if [ "$force_new" = true ]; then
+        echo "[$(date '+%H:%M:%S')] Force new is true" >> "$DEBUG_FILE"
         # Force create a new numbered session
         next_num=$(find_next_session_number "$base_session_name")
         if [ "$next_num" -eq 0 ]; then
@@ -228,17 +237,22 @@ else
             FLOAX_SESSION_NAME="${base_session_name}-${next_num}"
         fi
     else
+        echo "[$(date '+%H:%M:%S')] Force new is false, checking for existing sessions" >> "$DEBUG_FILE"
         # Check for existing sessions
         debug_log "Checking for existing sessions matching: $base_session_name"
+        echo "[$(date '+%H:%M:%S')] About to call find_matching_sessions" >> "$DEBUG_FILE"
         matching_sessions=$(find_matching_sessions "$base_session_name")
+        echo "[$(date '+%H:%M:%S')] find_matching_sessions returned: [$matching_sessions]" >> "$DEBUG_FILE"
         debug_log "matching_sessions: [$matching_sessions]"
 
         # Count non-empty lines
+        echo "[$(date '+%H:%M:%S')] Counting sessions" >> "$DEBUG_FILE"
         if [ -z "$matching_sessions" ]; then
             session_count=0
         else
             session_count=$(echo "$matching_sessions" | wc -l | tr -d ' ')
         fi
+        echo "[$(date '+%H:%M:%S')] session_count: $session_count" >> "$DEBUG_FILE"
         debug_log "session_count: $session_count"
 
         if [ "$session_count" -eq 0 ]; then
@@ -250,9 +264,11 @@ else
             # Exactly one session exists, use it
             FLOAX_SESSION_NAME="$matching_sessions"
         else
+            echo "[$(date '+%H:%M:%S')] Multiple sessions exist" >> "$DEBUG_FILE"
             debug_log "Multiple sessions exist"
             # Multiple sessions exist, let user choose with fzf
             if command -v fzf >/dev/null 2>&1; then
+                echo "[$(date '+%H:%M:%S')] fzf is available, showing selector" >> "$DEBUG_FILE"
                 debug_log "Using fzf to select"
                 FLOAX_SESSION_NAME=$(echo "$matching_sessions" | fzf \
                     --prompt="Select floax session: " \
@@ -260,19 +276,25 @@ else
                     --reverse \
                     --preview="tmux capture-pane -ep -t {}" \
                     --preview-window=right:60%)
+                echo "[$(date '+%H:%M:%S')] fzf returned: $FLOAX_SESSION_NAME" >> "$DEBUG_FILE"
                 if [ -z "$FLOAX_SESSION_NAME" ]; then
+                    echo "[$(date '+%H:%M:%S')] User cancelled fzf, exiting" >> "$DEBUG_FILE"
                     # User cancelled fzf, exit
                     exit 0
                 fi
             else
+                echo "[$(date '+%H:%M:%S')] fzf not available, using first session" >> "$DEBUG_FILE"
                 debug_log "fzf not available, using first session"
                 # fzf not available, just use the first one
                 FLOAX_SESSION_NAME=$(echo "$matching_sessions" | head -n 1)
             fi
         fi
+        echo "[$(date '+%H:%M:%S')] Final FLOAX_SESSION_NAME after matching logic: $FLOAX_SESSION_NAME" >> "$DEBUG_FILE"
         debug_log "Final FLOAX_SESSION_NAME after matching logic: $FLOAX_SESSION_NAME"
     fi
 fi
+
+echo "[$(date '+%H:%M:%S')] Session name determination complete" >> "$DEBUG_FILE"
 
 debug_log "=== SESSION NAME DETERMINATION COMPLETE ==="
 debug_log "Final FLOAX_SESSION_NAME: [$FLOAX_SESSION_NAME]"
