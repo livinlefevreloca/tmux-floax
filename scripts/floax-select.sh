@@ -1,50 +1,50 @@
 #!/usr/bin/env bash
 
-# Debug log file
-DEBUG_LOG="/tmp/floax-select-debug.log"
-echo "=== FLOAX-SELECT DEBUG $(date) ===" >> "$DEBUG_LOG"
+# Use existing debug log file
+DEBUG_FILE="/tmp/floax-debug.log"
+echo "[$(date '+%H:%M:%S')] === FLOAX-SELECT START ===" >> "$DEBUG_FILE"
 
 CURRENT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-echo "CURRENT_DIR: $CURRENT_DIR" >> "$DEBUG_LOG"
+echo "[$(date '+%H:%M:%S')] CURRENT_DIR: $CURRENT_DIR" >> "$DEBUG_FILE"
 
 source "$CURRENT_DIR/utils.sh"
 
 # Get the flag passed to this script (-l or -a)
 flag="$1"
-echo "Flag: $flag" >> "$DEBUG_LOG"
+echo "[$(date '+%H:%M:%S')] Flag: $flag" >> "$DEBUG_FILE"
 
 # Temp file to store selection
 TEMP_FILE="/tmp/floax-selection-$$"
-echo "TEMP_FILE: $TEMP_FILE" >> "$DEBUG_LOG"
+echo "[$(date '+%H:%M:%S')] TEMP_FILE: $TEMP_FILE" >> "$DEBUG_FILE"
 
 # Test if floax.sh exists and is executable
 if [ -x "$CURRENT_DIR/floax.sh" ]; then
-    echo "floax.sh is executable" >> "$DEBUG_LOG"
+    echo "[$(date '+%H:%M:%S')] floax.sh is executable" >> "$DEBUG_FILE"
 else
-    echo "ERROR: floax.sh not found or not executable at $CURRENT_DIR/floax.sh" >> "$DEBUG_LOG"
+    echo "[$(date '+%H:%M:%S')] ERROR: floax.sh not found or not executable at $CURRENT_DIR/floax.sh" >> "$DEBUG_FILE"
 fi
 
 # Run floax.sh with --print-only in a display-popup to get the selection
-echo "Running: tmux display-popup -E -w 80% -h 80% \"bash -c '$CURRENT_DIR/floax.sh $flag --print-only > $TEMP_FILE 2>> $DEBUG_LOG'\"" >> "$DEBUG_LOG"
+echo "[$(date '+%H:%M:%S')] Running display-popup with: $CURRENT_DIR/floax.sh $flag --print-only" >> "$DEBUG_FILE"
 tmux display-popup -E -w 80% -h 80% \
-    "bash -c '$CURRENT_DIR/floax.sh $flag --print-only > $TEMP_FILE 2>> $DEBUG_LOG'"
+    "bash -c '$CURRENT_DIR/floax.sh $flag --print-only > $TEMP_FILE 2>> $DEBUG_FILE'"
 popup_exit=$?
-echo "Popup exit code: $popup_exit" >> "$DEBUG_LOG"
+echo "[$(date '+%H:%M:%S')] Popup exit code: $popup_exit" >> "$DEBUG_FILE"
 
 # Read the selection
-echo "Checking for temp file..." >> "$DEBUG_LOG"
+echo "[$(date '+%H:%M:%S')] Checking for temp file..." >> "$DEBUG_FILE"
 if [ -f "$TEMP_FILE" ]; then
-    echo "Temp file exists" >> "$DEBUG_LOG"
+    echo "[$(date '+%H:%M:%S')] Temp file exists" >> "$DEBUG_FILE"
     selection=$(cat "$TEMP_FILE")
-    echo "Selection: [$selection]" >> "$DEBUG_LOG"
+    echo "[$(date '+%H:%M:%S')] Selection: [$selection]" >> "$DEBUG_FILE"
     rm -f "$TEMP_FILE"
 
     if [ -n "$selection" ]; then
-        echo "Selection is not empty, parsing..." >> "$DEBUG_LOG"
+        echo "[$(date '+%H:%M:%S')] Selection is not empty, parsing..." >> "$DEBUG_FILE"
         # Parse session:window
         session_name=$(echo "$selection" | cut -d':' -f1)
         window_index=$(echo "$selection" | cut -d':' -f2)
-        echo "Parsed session_name: $session_name, window_index: $window_index" >> "$DEBUG_LOG"
+        echo "[$(date '+%H:%M:%S')] Parsed session_name: $session_name, window_index: $window_index" >> "$DEBUG_FILE"
 
         # Check if session exists, create if not
         if ! tmux has-session -t "$session_name" 2>/dev/null; then
@@ -60,14 +60,14 @@ if [ -f "$TEMP_FILE" ]; then
         fi
 
         # Set bindings and open popup
-        echo "Opening floax popup for $session_name:$window_index" >> "$DEBUG_LOG"
+        echo "[$(date '+%H:%M:%S')] Opening floax popup for $session_name:$window_index" >> "$DEBUG_FILE"
         set_bindings
         tmux_popup "$session_name" "$window_index"
     else
-        echo "Selection is empty, user may have cancelled" >> "$DEBUG_LOG"
+        echo "[$(date '+%H:%M:%S')] Selection is empty, user may have cancelled" >> "$DEBUG_FILE"
     fi
 else
-    echo "ERROR: Temp file not found at $TEMP_FILE" >> "$DEBUG_LOG"
+    echo "[$(date '+%H:%M:%S')] ERROR: Temp file not found at $TEMP_FILE" >> "$DEBUG_FILE"
 fi
 
-echo "=== END DEBUG ===" >> "$DEBUG_LOG"
+echo "[$(date '+%H:%M:%S')] === FLOAX-SELECT END ===" >> "$DEBUG_FILE"
