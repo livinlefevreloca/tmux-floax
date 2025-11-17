@@ -16,7 +16,8 @@ OPTIONS:
     -d, --debug         Enable debug output
     -s, --session NAME  Attach to or create a specific named session
     -n, --new           Force create a new numbered session (e.g., session-1, session-2)
-    -a, --all           List all tmux sessions with fzf preview and select one
+    -l, --list          List directory sessions with fzf preview and select one
+    -a, --all           List ALL tmux sessions with fzf preview and select one
     -r, --replace       Kill all existing sessions for this directory/name and create fresh
 
 COMMAND:
@@ -39,7 +40,10 @@ EXAMPLES:
     # Replace all sessions for current directory
     floax.sh -r
 
-    # List all sessions and choose
+    # List directory sessions and choose
+    floax.sh -l
+
+    # List ALL tmux sessions and choose
     floax.sh -a
 
     # Named session with command
@@ -80,6 +84,7 @@ custom_session=""
 command=""
 force_new=false
 list_all=false
+list_dir=false
 replace=false
 
 echo "[$(date '+%H:%M:%S')] Starting argument parsing" >> "$DEBUG_FILE"
@@ -100,6 +105,10 @@ while [[ $# -gt 0 ]]; do
             force_new=true
             shift
             ;;
+        -l|--list)
+            list_dir=true
+            shift
+            ;;
         -a|--all)
             list_all=true
             shift
@@ -117,7 +126,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 echo "[$(date '+%H:%M:%S')] Finished argument parsing" >> "$DEBUG_FILE"
-echo "[$(date '+%H:%M:%S')] command='$command' custom_session='$custom_session' force_new=$force_new list_all=$list_all replace=$replace" >> "$DEBUG_FILE"
+echo "[$(date '+%H:%M:%S')] command='$command' custom_session='$custom_session' force_new=$force_new list_all=$list_all list_dir=$list_dir replace=$replace" >> "$DEBUG_FILE"
 
 # Find all existing floax sessions for a base session name
 find_matching_sessions() {
@@ -298,11 +307,31 @@ else
             echo "[$(date '+%H:%M:%S')] Multiple sessions exist" >> "$DEBUG_FILE"
             debug_log "Multiple sessions exist"
             # Multiple sessions exist
-            # When invoked via keybinding (no explicit -a flag), just use the first session
-            # fzf doesn't work properly in run-shell context
-            echo "[$(date '+%H:%M:%S')] Using first session (fzf only works with -a flag)" >> "$DEBUG_FILE"
-            debug_log "Using first session from multiple matches"
-            FLOAX_SESSION_NAME=$(echo "$matching_sessions" | head -n 1)
+            if [ "$list_dir" = true ]; then
+                # -l flag: show fzf with directory sessions
+                echo "[$(date '+%H:%M:%S')] List dir flag set, showing fzf for directory sessions" >> "$DEBUG_FILE"
+                if command -v fzf >/dev/null 2>&1; then
+                    FLOAX_SESSION_NAME=$(echo "$matching_sessions" | fzf \
+                        --prompt="Select directory session: " \
+                        --height=80% \
+                        --reverse \
+                        --preview="tmux capture-pane -ep -t {}" \
+                        --preview-window=right:60%)
+                    if [ -z "$FLOAX_SESSION_NAME" ]; then
+                        echo "[$(date '+%H:%M:%S')] User cancelled fzf, exiting" >> "$DEBUG_FILE"
+                        exit 0
+                    fi
+                else
+                    echo "[$(date '+%H:%M:%S')] fzf not available, using first session" >> "$DEBUG_FILE"
+                    FLOAX_SESSION_NAME=$(echo "$matching_sessions" | head -n 1)
+                fi
+            else
+                # Default keybinding: just use the first session
+                # fzf doesn't work properly in run-shell context
+                echo "[$(date '+%H:%M:%S')] Using first session (use -l for fzf)" >> "$DEBUG_FILE"
+                debug_log "Using first session from multiple matches"
+                FLOAX_SESSION_NAME=$(echo "$matching_sessions" | head -n 1)
+            fi
         fi
         echo "[$(date '+%H:%M:%S')] Final FLOAX_SESSION_NAME after matching logic: $FLOAX_SESSION_NAME" >> "$DEBUG_FILE"
         debug_log "Final FLOAX_SESSION_NAME after matching logic: $FLOAX_SESSION_NAME"
