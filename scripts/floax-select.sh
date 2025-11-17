@@ -2,7 +2,11 @@
 
 # Use existing debug log file
 DEBUG_FILE="/tmp/floax-debug.log"
-echo "[$(date '+%H:%M:%S')] === FLOAX-SELECT START ===" >> "$DEBUG_FILE"
+
+# Log IMMEDIATELY to verify script is being called
+echo "[$(date '+%H:%M:%S')] === FLOAX-SELECT START ===" >> "$DEBUG_FILE" 2>&1
+echo "[$(date '+%H:%M:%S')] Script args: $@" >> "$DEBUG_FILE" 2>&1
+echo "[$(date '+%H:%M:%S')] PWD: $PWD" >> "$DEBUG_FILE" 2>&1
 
 CURRENT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 echo "[$(date '+%H:%M:%S')] CURRENT_DIR: $CURRENT_DIR" >> "$DEBUG_FILE"
@@ -27,7 +31,7 @@ fi
 # Run floax.sh with --print-only in a display-popup to get the selection
 echo "[$(date '+%H:%M:%S')] Running display-popup with: $CURRENT_DIR/floax.sh $flag --print-only" >> "$DEBUG_FILE"
 tmux display-popup -E -w 80% -h 80% \
-    "bash -c '$CURRENT_DIR/floax.sh $flag --print-only > $TEMP_FILE 2>> $DEBUG_FILE'"
+    "bash -c \"$CURRENT_DIR/floax.sh $flag --print-only > $TEMP_FILE 2>> $DEBUG_FILE\""
 popup_exit=$?
 echo "[$(date '+%H:%M:%S')] Popup exit code: $popup_exit" >> "$DEBUG_FILE"
 
