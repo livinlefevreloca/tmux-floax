@@ -148,6 +148,8 @@ pop() {
 
     FLOAX_WIDTH=$(envvar_value FLOAX_WIDTH)
     FLOAX_HEIGHT=$(envvar_value FLOAX_HEIGHT)
+    FLOAX_BORDER_COLOR=$(envvar_value FLOAX_BORDER_COLOR)
+    FLOAX_TEXT_COLOR=$(envvar_value FLOAX_TEXT_COLOR)
 
     FLOAX_TITLE=$(envvar_value FLOAX_TITLE)
     if [ -z "$FLOAX_TITLE" ]; then
