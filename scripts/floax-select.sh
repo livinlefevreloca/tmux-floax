@@ -11,7 +11,7 @@ TEMP_FILE="/tmp/floax-selection-$$"
 
 # Run floax.sh with --print-only in a display-popup to get the selection
 tmux display-popup -E -w 80% -h 80% \
-    "$CURRENT_DIR/floax.sh $flag --print-only > $TEMP_FILE"
+    "bash -c '$CURRENT_DIR/floax.sh $flag --print-only > $TEMP_FILE'"
 
 # Read the selection
 if [ -f "$TEMP_FILE" ]; then
