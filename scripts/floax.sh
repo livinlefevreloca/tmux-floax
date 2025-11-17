@@ -63,11 +63,15 @@ EOF
 
 # Debug logging function
 DEBUG=false
+DEBUG_FILE="/tmp/floax-debug.log"
 debug_log() {
     if [ "$DEBUG" = true ]; then
-        echo "$@" >&2
+        echo "[$(date '+%H:%M:%S')] $@" >> "$DEBUG_FILE"
     fi
 }
+
+# Always log keybinding invocations to help debug toggle issues
+echo "[$(date '+%H:%M:%S')] === FLOAX INVOKED ===" >> "$DEBUG_FILE"
 
 # Parse arguments
 custom_session=""
@@ -266,6 +270,11 @@ debug_log "=== SESSION NAME DETERMINATION COMPLETE ==="
 debug_log "Final FLOAX_SESSION_NAME: [$FLOAX_SESSION_NAME]"
 
 current_session=$(tmux display-message -p '#{session_name}')
+
+# Always log current session for debugging toggle issues
+echo "[$(date '+%H:%M:%S')] Current session: $current_session" >> "$DEBUG_FILE"
+echo "[$(date '+%H:%M:%S')] Target FLOAX_SESSION_NAME: $FLOAX_SESSION_NAME" >> "$DEBUG_FILE"
+
 debug_log "Current session: $current_session"
 debug_log "Target FLOAX_SESSION_NAME: $FLOAX_SESSION_NAME"
 
@@ -273,6 +282,7 @@ tmux setenv -g ORIGIN_SESSION "$current_session"
 
 # Check if we're currently in a floax session (any floax session, not just this directory's)
 if [[ "$current_session" == floax-* ]]; then
+    echo "[$(date '+%H:%M:%S')] Inside floax session - toggling off" >> "$DEBUG_FILE"
     debug_log "Already in a floax session, detaching..."
     unset_bindings
 
@@ -280,10 +290,19 @@ if [[ "$current_session" == floax-* ]]; then
         FLOAX_TITLE="$DEFAULT_TITLE"
     fi
 
-    change_popup_title "$FLOAX_TITLE"
+    echo "[$(date '+%H:%M:%S')] Calling change_popup_title with: $FLOAX_TITLE" >> "$DEBUG_FILE"
+    if type change_popup_title >/dev/null 2>&1; then
+        change_popup_title "$FLOAX_TITLE"
+        echo "[$(date '+%H:%M:%S')] change_popup_title succeeded" >> "$DEBUG_FILE"
+    else
+        echo "[$(date '+%H:%M:%S')] WARNING: change_popup_title function not found, skipping" >> "$DEBUG_FILE"
+    fi
     tmux setenv -g FLOAX_TITLE "$FLOAX_TITLE"
+    echo "[$(date '+%H:%M:%S')] About to detach client" >> "$DEBUG_FILE"
     tmux detach-client
+    echo "[$(date '+%H:%M:%S')] Detached successfully" >> "$DEBUG_FILE"
 else
+    echo "[$(date '+%H:%M:%S')] Not in floax session - toggling on" >> "$DEBUG_FILE"
     debug_log "Not in a floax session, proceeding..."
     set_bindings
 
