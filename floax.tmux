@@ -6,6 +6,12 @@ source "$CURRENT_DIR/scripts/utils.sh"
 tmux bind-key $(tmux_option_or_fallback "@floax-bind" "p") run-shell "$CURRENT_DIR/scripts/floax.sh"
 tmux bind-key "$(tmux_option_or_fallback "@floax-bind-menu" "P")" run-shell "$CURRENT_DIR/scripts/menu.sh"
 
+# Keybindings for fzf selection (requires display-popup for interactivity)
+# List windows in current directory session
+tmux bind-key "$(tmux_option_or_fallback "@floax-bind-list" "M-p")" display-popup -E -w 80% -h 80% "$CURRENT_DIR/scripts/floax.sh -l"
+# List all tmux sessions
+tmux bind-key "$(tmux_option_or_fallback "@floax-bind-list-all" "M-P")" display-popup -E -w 80% -h 80% "$CURRENT_DIR/scripts/floax.sh -a"
+
 tmux setenv -g FLOAX_WIDTH "$(tmux_option_or_fallback '@floax-width' '80%')" 
 tmux setenv -g FLOAX_HEIGHT "$(tmux_option_or_fallback '@floax-height' '80%')" 
 

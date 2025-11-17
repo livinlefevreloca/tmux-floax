@@ -46,6 +46,25 @@ If you want to toggle floax without `<prefix>` (e.g. `Alt+p`), you can do so by 
 set -g @floax-bind '-n M-p'
 ```
 
+### Additional Keybindings
+
+FloaX includes additional keybindings for interactive window/session selection using fzf:
+
+- **`Alt+p`** (default): List and select from windows in the current directory session with live preview
+- **`Alt+Shift+P`** (default): List and select from all tmux sessions with live preview
+
+These keybindings can be customized:
+
+```bash
+# List windows in current directory session (default: M-p / Alt+p)
+set -g @floax-bind-list 'M-p'
+
+# List all tmux sessions (default: M-P / Alt+Shift+P)
+set -g @floax-bind-list-all 'M-P'
+```
+
+**Note:** These keybindings use `display-popup` (not `run-shell`) to provide an interactive context for fzf. They require tmux 3.3+.
+
 ### Additional configuration options:
 
 ```bash
