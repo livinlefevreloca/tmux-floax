@@ -15,10 +15,10 @@ OPTIONS:
     -h, --help          Show this help message
     -d, --debug         Enable debug output
     -s, --session NAME  Attach to or create a specific named session
-    -n, --new           Force create a new numbered session (e.g., session-1, session-2)
-    -l, --list          List directory sessions with fzf preview and select one
+    -n, --new           Force create a new window in the session
+    -l, --list          List windows in directory session with fzf preview and select one
     -a, --all           List ALL tmux sessions with fzf preview and select one
-    -r, --replace       Kill all existing sessions for this directory/name and create fresh
+    -r, --replace       Kill the existing session for this directory/name and create fresh
 
 COMMAND:
     Any command after the options will be executed in the floax session.
@@ -31,16 +31,16 @@ EXAMPLES:
     # Open with a command
     floax.sh lazygit
 
-    # Create a new numbered session
+    # Create a new window in the session
     floax.sh -n
 
     # Attach to a named session
     floax.sh -s myproject
 
-    # Replace all sessions for current directory
+    # Replace session for current directory
     floax.sh -r
 
-    # List directory sessions and choose
+    # List windows and choose
     floax.sh -l
 
     # List ALL tmux sessions and choose
@@ -57,9 +57,9 @@ EXAMPLES:
 
 BEHAVIOR:
     - Without options: Reuses existing directory session or creates new
-    - Multiple sessions: Shows fzf menu with live preview (requires fzf)
+    - Multiple windows: Use -l to show fzf menu with live preview (requires fzf)
     - Session naming: Based on last 2 directory components (e.g., floax-my-project)
-    - Numbering: First session has no number, subsequent ones get -1, -2, etc.
+    - Windows: -n flag creates new windows within the same session
 
 EOF
     exit 0
@@ -128,30 +128,32 @@ done
 echo "[$(date '+%H:%M:%S')] Finished argument parsing" >> "$DEBUG_FILE"
 echo "[$(date '+%H:%M:%S')] command='$command' custom_session='$custom_session' force_new=$force_new list_all=$list_all list_dir=$list_dir replace=$replace" >> "$DEBUG_FILE"
 
-# Find all existing floax sessions for a base session name
-find_matching_sessions() {
-    local base_name="$1"
-    tmux list-sessions -F "#{session_name}" 2>/dev/null | grep "^${base_name}\(-[0-9]\+\)\?$" || true
+# Find all windows in a session
+find_session_windows() {
+    local session_name="$1"
+    if tmux has-session -t "$session_name" 2>/dev/null; then
+        tmux list-windows -t "$session_name" -F "#{window_index}" 2>/dev/null || true
+    fi
 }
 
-# Find next available session number
-find_next_session_number() {
-    local base_name="$1"
-    local sessions=$(find_matching_sessions "$base_name")
-    local max_num=-1
+# Find next available window index
+find_next_window_index() {
+    local session_name="$1"
+    if ! tmux has-session -t "$session_name" 2>/dev/null; then
+        echo "0"
+        return
+    fi
 
-    while IFS= read -r session; do
-        if [[ "$session" == "$base_name" ]]; then
-            max_num=0
-        elif [[ "$session" =~ ^${base_name}-([0-9]+)$ ]]; then
-            local num="${BASH_REMATCH[1]}"
-            if [ "$num" -gt "$max_num" ]; then
-                max_num="$num"
-            fi
+    local windows=$(find_session_windows "$session_name")
+    local max_index=-1
+
+    while IFS= read -r index; do
+        if [ -n "$index" ] && [ "$index" -gt "$max_index" ]; then
+            max_index="$index"
         fi
-    done <<< "$sessions"
+    done <<< "$windows"
 
-    echo $((max_num + 1))
+    echo $((max_index + 1))
 }
 
 # Check FIRST if we're already in a floax session - if so, just detach
@@ -190,7 +192,7 @@ echo "[$(date '+%H:%M:%S')] Getting current directory" >> "$DEBUG_FILE"
 current_dir=$(tmux display-message -p '#{pane_current_path}')
 echo "[$(date '+%H:%M:%S')] current_dir='$current_dir'" >> "$DEBUG_FILE"
 
-# Handle replace flag - kill all existing sessions for this directory/name and create a new one
+# Handle replace flag - kill the existing session for this directory/name and create a new one
 if [ "$replace" = true ]; then
     if [ -n "$custom_session" ]; then
         base_session_name="$custom_session"
@@ -198,18 +200,14 @@ if [ "$replace" = true ]; then
         base_session_name=$(generate_session_name "$current_dir")
     fi
 
-    # Find and kill all matching sessions
-    matching_sessions=$(find_matching_sessions "$base_session_name")
-    if [ -n "$matching_sessions" ]; then
-        while IFS= read -r session; do
-            if tmux has-session -t "$session" 2>/dev/null; then
-                tmux kill-session -t "$session"
-            fi
-        done <<< "$matching_sessions"
+    # Kill the session if it exists
+    if tmux has-session -t "$base_session_name" 2>/dev/null; then
+        tmux kill-session -t "$base_session_name"
     fi
 
-    # Set the session name to the base name (no number)
+    # Set the session name to the base name
     FLOAX_SESSION_NAME="$base_session_name"
+    FLOAX_WINDOW_INDEX="0"
 fi
 
 # Determine final session name
@@ -230,6 +228,7 @@ elif [ "$list_all" = true ]; then
     if [ -z "$all_sessions" ]; then
         # No sessions exist (or only current session), create a new one based on directory
         FLOAX_SESSION_NAME=$(generate_session_name "$current_dir")
+        FLOAX_WINDOW_INDEX="0"
     else
         if command -v fzf >/dev/null 2>&1; then
             FLOAX_SESSION_NAME=$(echo "$all_sessions" | fzf \
@@ -246,99 +245,81 @@ elif [ "$list_all" = true ]; then
             # fzf not available, just use the first one
             FLOAX_SESSION_NAME=$(echo "$all_sessions" | head -n 1)
         fi
+        # When selecting from all sessions, attach to first window
+        FLOAX_WINDOW_INDEX="0"
     fi
 elif [ -n "$custom_session" ]; then
     echo "[$(date '+%H:%M:%S')] Custom session specified: $custom_session" >> "$DEBUG_FILE"
-    base_session_name="$custom_session"
+    FLOAX_SESSION_NAME="$custom_session"
 
     if [ "$force_new" = true ]; then
-        echo "[$(date '+%H:%M:%S')] Force new with custom session" >> "$DEBUG_FILE"
-        # Force create a new numbered session
-        next_num=$(find_next_session_number "$base_session_name")
-        if [ "$next_num" -eq 0 ]; then
-            FLOAX_SESSION_NAME="$base_session_name"
-        else
-            FLOAX_SESSION_NAME="${base_session_name}-${next_num}"
-        fi
+        echo "[$(date '+%H:%M:%S')] Force new with custom session - creating new window" >> "$DEBUG_FILE"
+        # Force create a new window in the session
+        FLOAX_WINDOW_INDEX=$(find_next_window_index "$FLOAX_SESSION_NAME")
     else
-        echo "[$(date '+%H:%M:%S')] Using custom session name as-is" >> "$DEBUG_FILE"
-        FLOAX_SESSION_NAME="$base_session_name"
+        echo "[$(date '+%H:%M:%S')] Using custom session, window 0" >> "$DEBUG_FILE"
+        FLOAX_WINDOW_INDEX="0"
     fi
 else
     echo "[$(date '+%H:%M:%S')] No custom session, generating from directory" >> "$DEBUG_FILE"
     debug_log "Calling generate_session_name with: $current_dir"
-    base_session_name=$(generate_session_name "$current_dir")
-    echo "[$(date '+%H:%M:%S')] base_session_name result: $base_session_name" >> "$DEBUG_FILE"
-    debug_log "base_session_name result: $base_session_name"
+    FLOAX_SESSION_NAME=$(generate_session_name "$current_dir")
+    echo "[$(date '+%H:%M:%S')] FLOAX_SESSION_NAME: $FLOAX_SESSION_NAME" >> "$DEBUG_FILE"
+    debug_log "FLOAX_SESSION_NAME: $FLOAX_SESSION_NAME"
 
     if [ "$force_new" = true ]; then
-        echo "[$(date '+%H:%M:%S')] Force new is true" >> "$DEBUG_FILE"
-        # Force create a new numbered session
-        next_num=$(find_next_session_number "$base_session_name")
-        if [ "$next_num" -eq 0 ]; then
-            FLOAX_SESSION_NAME="$base_session_name"
-        else
-            FLOAX_SESSION_NAME="${base_session_name}-${next_num}"
-        fi
+        echo "[$(date '+%H:%M:%S')] Force new is true - creating new window" >> "$DEBUG_FILE"
+        # Force create a new window in the session
+        FLOAX_WINDOW_INDEX=$(find_next_window_index "$FLOAX_SESSION_NAME")
     else
-        echo "[$(date '+%H:%M:%S')] Force new is false, checking for existing sessions" >> "$DEBUG_FILE"
-        # Check for existing sessions
-        debug_log "Checking for existing sessions matching: $base_session_name"
-        echo "[$(date '+%H:%M:%S')] About to call find_matching_sessions" >> "$DEBUG_FILE"
-        matching_sessions=$(find_matching_sessions "$base_session_name")
-        echo "[$(date '+%H:%M:%S')] find_matching_sessions returned: [$matching_sessions]" >> "$DEBUG_FILE"
-        debug_log "matching_sessions: [$matching_sessions]"
+        echo "[$(date '+%H:%M:%S')] Force new is false, checking for existing session" >> "$DEBUG_FILE"
 
-        # Count non-empty lines
-        echo "[$(date '+%H:%M:%S')] Counting sessions" >> "$DEBUG_FILE"
-        if [ -z "$matching_sessions" ]; then
-            session_count=0
-        else
-            session_count=$(echo "$matching_sessions" | wc -l | tr -d ' ')
-        fi
-        echo "[$(date '+%H:%M:%S')] session_count: $session_count" >> "$DEBUG_FILE"
-        debug_log "session_count: $session_count"
-
-        if [ "$session_count" -eq 0 ]; then
-            debug_log "No existing sessions, using base name"
-            # No existing sessions, use base name
-            FLOAX_SESSION_NAME="$base_session_name"
-        elif [ "$session_count" -eq 1 ]; then
-            debug_log "Exactly one session exists, using it"
-            # Exactly one session exists, use it
-            FLOAX_SESSION_NAME="$matching_sessions"
-        else
-            echo "[$(date '+%H:%M:%S')] Multiple sessions exist" >> "$DEBUG_FILE"
-            debug_log "Multiple sessions exist"
-            # Multiple sessions exist
+        if tmux has-session -t "$FLOAX_SESSION_NAME" 2>/dev/null; then
+            debug_log "Session exists, checking windows"
+            # Session exists - check if we should list windows
             if [ "$list_dir" = true ]; then
-                # -l flag: show fzf with directory sessions
-                echo "[$(date '+%H:%M:%S')] List dir flag set, showing fzf for directory sessions" >> "$DEBUG_FILE"
+                # -l flag: show fzf with windows
+                echo "[$(date '+%H:%M:%S')] List dir flag set, showing fzf for windows" >> "$DEBUG_FILE"
+                windows=$(tmux list-windows -t "$FLOAX_SESSION_NAME" -F "#{window_index}: #{window_name}" 2>/dev/null)
+
                 if command -v fzf >/dev/null 2>&1; then
-                    FLOAX_SESSION_NAME=$(echo "$matching_sessions" | fzf \
-                        --prompt="Select directory session: " \
+                    selected=$(echo "$windows" | fzf \
+                        --prompt="Select window: " \
                         --height=80% \
                         --reverse \
-                        --preview="tmux capture-pane -ep -t {}" \
+                        --preview="bash -c 'tmux capture-pane -ep -t ${FLOAX_SESSION_NAME}:\$(echo {} | cut -d: -f1)'" \
                         --preview-window=right:60%)
-                    if [ -z "$FLOAX_SESSION_NAME" ]; then
+                    if [ -z "$selected" ]; then
                         echo "[$(date '+%H:%M:%S')] User cancelled fzf, exiting" >> "$DEBUG_FILE"
                         exit 0
                     fi
+                    # Extract window index (everything before the colon)
+                    FLOAX_WINDOW_INDEX=$(echo "$selected" | cut -d':' -f1 | tr -d ' ')
                 else
-                    echo "[$(date '+%H:%M:%S')] fzf not available, using first session" >> "$DEBUG_FILE"
-                    FLOAX_SESSION_NAME=$(echo "$matching_sessions" | head -n 1)
+                    echo "[$(date '+%H:%M:%S')] fzf not available, using window 0" >> "$DEBUG_FILE"
+                    FLOAX_WINDOW_INDEX="0"
                 fi
             else
-                # Default keybinding: just use the first session
-                # fzf doesn't work properly in run-shell context
-                echo "[$(date '+%H:%M:%S')] Using first session (use -l for fzf)" >> "$DEBUG_FILE"
-                debug_log "Using first session from multiple matches"
-                FLOAX_SESSION_NAME=$(echo "$matching_sessions" | head -n 1)
+                # Default: attach to last used window, or first window if no state
+                echo "[$(date '+%H:%M:%S')] Checking for last used window" >> "$DEBUG_FILE"
+                last_window=$(get_last_window "$FLOAX_SESSION_NAME")
+                if [ -n "$last_window" ]; then
+                    echo "[$(date '+%H:%M:%S')] Found last used window: $last_window" >> "$DEBUG_FILE"
+                    debug_log "Using last used window: $last_window"
+                    FLOAX_WINDOW_INDEX="$last_window"
+                else
+                    echo "[$(date '+%H:%M:%S')] No last window found, using window 0" >> "$DEBUG_FILE"
+                    debug_log "No last window found, using first window"
+                    FLOAX_WINDOW_INDEX="0"
+                fi
             fi
+        else
+            debug_log "No existing session, will create at window 0"
+            # No existing session, will create at window 0
+            FLOAX_WINDOW_INDEX="0"
         fi
-        echo "[$(date '+%H:%M:%S')] Final FLOAX_SESSION_NAME after matching logic: $FLOAX_SESSION_NAME" >> "$DEBUG_FILE"
-        debug_log "Final FLOAX_SESSION_NAME after matching logic: $FLOAX_SESSION_NAME"
+        echo "[$(date '+%H:%M:%S')] Final FLOAX_WINDOW_INDEX: $FLOAX_WINDOW_INDEX" >> "$DEBUG_FILE"
+        debug_log "Final FLOAX_WINDOW_INDEX: $FLOAX_WINDOW_INDEX"
     fi
 fi
 
@@ -346,9 +327,12 @@ echo "[$(date '+%H:%M:%S')] Session name determination complete" >> "$DEBUG_FILE
 
 debug_log "=== SESSION NAME DETERMINATION COMPLETE ==="
 debug_log "Final FLOAX_SESSION_NAME: [$FLOAX_SESSION_NAME]"
+debug_log "Final FLOAX_WINDOW_INDEX: [$FLOAX_WINDOW_INDEX]"
 
 echo "[$(date '+%H:%M:%S')] Target FLOAX_SESSION_NAME: $FLOAX_SESSION_NAME" >> "$DEBUG_FILE"
+echo "[$(date '+%H:%M:%S')] Target FLOAX_WINDOW_INDEX: $FLOAX_WINDOW_INDEX" >> "$DEBUG_FILE"
 debug_log "Target FLOAX_SESSION_NAME: $FLOAX_SESSION_NAME"
+debug_log "Target FLOAX_WINDOW_INDEX: $FLOAX_WINDOW_INDEX"
 
 tmux setenv -g ORIGIN_SESSION "$current_session"
 
@@ -360,12 +344,23 @@ set_bindings
 # Check if the session exists
 debug_log "Checking if session $FLOAX_SESSION_NAME exists..."
 if tmux has-session -t "$FLOAX_SESSION_NAME" 2>/dev/null; then
-    debug_log "Session EXISTS, attaching..."
-    # Session exists - if command provided, send it to the session
-    if [ -n "$command" ]; then
-        tmux send-keys -t "$FLOAX_SESSION_NAME" "$command" Enter
+    debug_log "Session EXISTS"
+    # Session exists - check if we need to create a new window
+    if ! tmux list-windows -t "$FLOAX_SESSION_NAME" -F "#{window_index}" | grep -q "^${FLOAX_WINDOW_INDEX}$"; then
+        debug_log "Window $FLOAX_WINDOW_INDEX does not exist, creating new window"
+        if [ -n "$command" ]; then
+            tmux new-window -t "$FLOAX_SESSION_NAME:$FLOAX_WINDOW_INDEX" -c "$current_dir" "$command"
+        else
+            tmux new-window -t "$FLOAX_SESSION_NAME:$FLOAX_WINDOW_INDEX" -c "$current_dir"
+        fi
+    else
+        debug_log "Window $FLOAX_WINDOW_INDEX exists"
+        # Window exists - if command provided, send it to the window
+        if [ -n "$command" ]; then
+            tmux send-keys -t "$FLOAX_SESSION_NAME:$FLOAX_WINDOW_INDEX" "$command" Enter
+        fi
     fi
-    tmux_popup "$FLOAX_SESSION_NAME"
+    tmux_popup "$FLOAX_SESSION_NAME" "$FLOAX_WINDOW_INDEX"
 else
     debug_log "Session DOES NOT EXIST, creating..."
     # Create a new session for this directory
@@ -379,6 +374,6 @@ else
     fi
     debug_log "Session creation result: $?"
     tmux set-option -t "$FLOAX_SESSION_NAME" status off
-    debug_log "Calling tmux_popup with session: $FLOAX_SESSION_NAME"
-    tmux_popup "$FLOAX_SESSION_NAME"
+    debug_log "Calling tmux_popup with session: $FLOAX_SESSION_NAME, window: $FLOAX_WINDOW_INDEX"
+    tmux_popup "$FLOAX_SESSION_NAME" "$FLOAX_WINDOW_INDEX"
 fi

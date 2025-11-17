@@ -47,6 +47,29 @@ FLOAX_TITLE=$(envvar_value FLOAX_TITLE)
 DEFAULT_TITLE='FloaX: C-M-s 󰘕   C-M-b 󰁌   C-M-f 󰊓   C-M-r 󰑓   C-M-e 󱂬   C-M-d '
 FLOAX_SESSION_NAME=$(envvar_value FLOAX_SESSION_NAME)
 DEFAULT_SESSION_NAME='scratch'
+FLOAX_STATE_FILE="${CURRENT_DIR}/../.floax-state"
+
+# Get the last used window for a session
+get_last_window() {
+    local session_name="$1"
+    if [ -f "$FLOAX_STATE_FILE" ]; then
+        grep "^${session_name}:" "$FLOAX_STATE_FILE" | cut -d':' -f2
+    fi
+}
+
+# Save the last used window for a session
+save_last_window() {
+    local session_name="$1"
+    local window_index="$2"
+
+    # Create state file if it doesn't exist
+    touch "$FLOAX_STATE_FILE"
+
+    # Remove old entry for this session and add new one
+    grep -v "^${session_name}:" "$FLOAX_STATE_FILE" > "${FLOAX_STATE_FILE}.tmp" 2>/dev/null || true
+    echo "${session_name}:${window_index}" >> "${FLOAX_STATE_FILE}.tmp"
+    mv "${FLOAX_STATE_FILE}.tmp" "$FLOAX_STATE_FILE"
+}
 
 set_bindings() {
     tmux bind -n C-M-s run "$CURRENT_DIR/zoom-options.sh in"
@@ -91,6 +114,7 @@ is_tmux_version_supported() {
 
 tmux_popup() {
     local session_name="$1"
+    local window_index="${2:-0}"  # Default to window 0 if not specified
 
     # For backward compatibility, generate session name if not provided
     if [ -z "$session_name" ]; then
@@ -105,10 +129,10 @@ tmux_popup() {
     tmux setenv -g FLOAX_SESSION_NAME "$session_name"
 
     if is_tmux_version_supported; then
-        if ! pop "$session_name"; then
+        if ! pop "$session_name" "$window_index"; then
             tmux setenv -g FLOAX_WIDTH "$(tmux_option_or_fallback '@floax-width' '80%')"
             tmux setenv -g FLOAX_HEIGHT "$(tmux_option_or_fallback '@floax-height' '80%')"
-            pop "$session_name"
+            pop "$session_name" "$window_index"
         fi
     else
         tmux display-message \
@@ -119,6 +143,8 @@ tmux_popup() {
 
 pop() {
     local session_name="$1"
+    local window_index="${2:-0}"  # Default to window 0 if not specified
+    local target="${session_name}:${window_index}"
 
     FLOAX_WIDTH=$(envvar_value FLOAX_WIDTH)
     FLOAX_HEIGHT=$(envvar_value FLOAX_HEIGHT)
@@ -128,7 +154,8 @@ pop() {
         FLOAX_TITLE="$DEFAULT_TITLE"
     fi
 
-    debug_log "pop() called with session: $session_name"
+    debug_log "pop() called with session: $session_name, window: $window_index"
+    debug_log "Target: $target"
     debug_log "Checking if session exists..."
     if tmux has-session -t "$session_name" 2>/dev/null; then
         debug_log "Session $session_name exists!"
@@ -137,7 +164,11 @@ pop() {
     fi
 
     tmux set-option -t "$session_name" detach-on-destroy on
-    debug_log "About to attach to session: $session_name"
+
+    # Save the last used window for this session
+    save_last_window "$session_name" "$window_index"
+
+    debug_log "About to attach to target: $target"
     tmux popup \
         -S fg="$FLOAX_BORDER_COLOR" \
         -s fg="$FLOAX_TEXT_COLOR" \
@@ -146,5 +177,5 @@ pop() {
         -h "$FLOAX_HEIGHT" \
         -b rounded \
         -E \
-        "tmux attach-session -t \"$session_name\""
+        "tmux attach-session -t \"$target\""
 }
