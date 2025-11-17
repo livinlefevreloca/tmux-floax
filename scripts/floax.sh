@@ -145,6 +145,37 @@ find_next_session_number() {
     echo $((max_num + 1))
 }
 
+# Check FIRST if we're already in a floax session - if so, just detach
+current_session=$(tmux display-message -p '#{session_name}')
+echo "[$(date '+%H:%M:%S')] Current session: $current_session" >> "$DEBUG_FILE"
+
+# If we're in ANY floax session, just toggle off (detach)
+if [[ "$current_session" == floax-* ]]; then
+    echo "[$(date '+%H:%M:%S')] Already inside floax session - toggling off immediately" >> "$DEBUG_FILE"
+    unset_bindings
+
+    if [ -z "$FLOAX_TITLE" ]; then
+        FLOAX_TITLE="$DEFAULT_TITLE"
+    fi
+
+    echo "[$(date '+%H:%M:%S')] Calling change_popup_title" >> "$DEBUG_FILE"
+    if type change_popup_title >/dev/null 2>&1; then
+        change_popup_title "$FLOAX_TITLE"
+        echo "[$(date '+%H:%M:%S')] change_popup_title succeeded" >> "$DEBUG_FILE"
+    else
+        echo "[$(date '+%H:%M:%S')] WARNING: change_popup_title function not found, skipping" >> "$DEBUG_FILE"
+    fi
+    tmux setenv -g FLOAX_TITLE "$FLOAX_TITLE"
+    tmux setenv -g ORIGIN_SESSION "$current_session"
+    echo "[$(date '+%H:%M:%S')] About to detach client" >> "$DEBUG_FILE"
+    tmux detach-client
+    echo "[$(date '+%H:%M:%S')] Detached successfully" >> "$DEBUG_FILE"
+    exit 0
+fi
+
+# Not in a floax session, so proceed with session determination
+echo "[$(date '+%H:%M:%S')] Not in floax session, proceeding with session determination" >> "$DEBUG_FILE"
+
 # Generate session name based on current directory or use custom session
 echo "[$(date '+%H:%M:%S')] Getting current directory" >> "$DEBUG_FILE"
 current_dir=$(tmux display-message -p '#{pane_current_path}')
@@ -299,66 +330,38 @@ echo "[$(date '+%H:%M:%S')] Session name determination complete" >> "$DEBUG_FILE
 debug_log "=== SESSION NAME DETERMINATION COMPLETE ==="
 debug_log "Final FLOAX_SESSION_NAME: [$FLOAX_SESSION_NAME]"
 
-current_session=$(tmux display-message -p '#{session_name}')
-
-# Always log current session for debugging toggle issues
-echo "[$(date '+%H:%M:%S')] Current session: $current_session" >> "$DEBUG_FILE"
 echo "[$(date '+%H:%M:%S')] Target FLOAX_SESSION_NAME: $FLOAX_SESSION_NAME" >> "$DEBUG_FILE"
-
-debug_log "Current session: $current_session"
 debug_log "Target FLOAX_SESSION_NAME: $FLOAX_SESSION_NAME"
 
 tmux setenv -g ORIGIN_SESSION "$current_session"
 
-# Check if we're currently in a floax session (any floax session, not just this directory's)
-if [[ "$current_session" == floax-* ]]; then
-    echo "[$(date '+%H:%M:%S')] Inside floax session - toggling off" >> "$DEBUG_FILE"
-    debug_log "Already in a floax session, detaching..."
-    unset_bindings
+# We're not in a floax session (checked earlier), so proceed with toggling on
+echo "[$(date '+%H:%M:%S')] Toggling floax on" >> "$DEBUG_FILE"
+debug_log "Not in a floax session, proceeding..."
+set_bindings
 
-    if [ -z "$FLOAX_TITLE" ]; then
-        FLOAX_TITLE="$DEFAULT_TITLE"
+# Check if the session exists
+debug_log "Checking if session $FLOAX_SESSION_NAME exists..."
+if tmux has-session -t "$FLOAX_SESSION_NAME" 2>/dev/null; then
+    debug_log "Session EXISTS, attaching..."
+    # Session exists - if command provided, send it to the session
+    if [ -n "$command" ]; then
+        tmux send-keys -t "$FLOAX_SESSION_NAME" "$command" Enter
     fi
-
-    echo "[$(date '+%H:%M:%S')] Calling change_popup_title with: $FLOAX_TITLE" >> "$DEBUG_FILE"
-    if type change_popup_title >/dev/null 2>&1; then
-        change_popup_title "$FLOAX_TITLE"
-        echo "[$(date '+%H:%M:%S')] change_popup_title succeeded" >> "$DEBUG_FILE"
-    else
-        echo "[$(date '+%H:%M:%S')] WARNING: change_popup_title function not found, skipping" >> "$DEBUG_FILE"
-    fi
-    tmux setenv -g FLOAX_TITLE "$FLOAX_TITLE"
-    echo "[$(date '+%H:%M:%S')] About to detach client" >> "$DEBUG_FILE"
-    tmux detach-client
-    echo "[$(date '+%H:%M:%S')] Detached successfully" >> "$DEBUG_FILE"
+    tmux_popup "$FLOAX_SESSION_NAME"
 else
-    echo "[$(date '+%H:%M:%S')] Not in floax session - toggling on" >> "$DEBUG_FILE"
-    debug_log "Not in a floax session, proceeding..."
-    set_bindings
-
-    # Check if the session exists
-    debug_log "Checking if session $FLOAX_SESSION_NAME exists..."
-    if tmux has-session -t "$FLOAX_SESSION_NAME" 2>/dev/null; then
-        debug_log "Session EXISTS, attaching..."
-        # Session exists - if command provided, send it to the session
-        if [ -n "$command" ]; then
-            tmux send-keys -t "$FLOAX_SESSION_NAME" "$command" Enter
-        fi
-        tmux_popup "$FLOAX_SESSION_NAME"
+    debug_log "Session DOES NOT EXIST, creating..."
+    # Create a new session for this directory
+    debug_log "Creating new session: $FLOAX_SESSION_NAME in directory: $current_dir"
+    if [ -n "$command" ]; then
+        # Create session and run the command
+        tmux new-session -d -c "$current_dir" -s "$FLOAX_SESSION_NAME" "$command"
     else
-        debug_log "Session DOES NOT EXIST, creating..."
-        # Create a new session for this directory
-        debug_log "Creating new session: $FLOAX_SESSION_NAME in directory: $current_dir"
-        if [ -n "$command" ]; then
-            # Create session and run the command
-            tmux new-session -d -c "$current_dir" -s "$FLOAX_SESSION_NAME" "$command"
-        else
-            # Create session with default shell
-            tmux new-session -d -c "$current_dir" -s "$FLOAX_SESSION_NAME"
-        fi
-        debug_log "Session creation result: $?"
-        tmux set-option -t "$FLOAX_SESSION_NAME" status off
-        debug_log "Calling tmux_popup with session: $FLOAX_SESSION_NAME"
-        tmux_popup "$FLOAX_SESSION_NAME"
+        # Create session with default shell
+        tmux new-session -d -c "$current_dir" -s "$FLOAX_SESSION_NAME"
     fi
+    debug_log "Session creation result: $?"
+    tmux set-option -t "$FLOAX_SESSION_NAME" status off
+    debug_log "Calling tmux_popup with session: $FLOAX_SESSION_NAME"
+    tmux_popup "$FLOAX_SESSION_NAME"
 fi
