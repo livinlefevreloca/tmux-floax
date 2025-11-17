@@ -223,8 +223,12 @@ elif [ "$list_all" = true ]; then
     # List all tmux sessions and let user choose
     all_sessions=$(tmux list-sessions -F "#{session_name}" 2>/dev/null)
 
+    # Filter out the current session to avoid recursion
+    echo "[$(date '+%H:%M:%S')] Filtering out current session: $current_session" >> "$DEBUG_FILE"
+    all_sessions=$(echo "$all_sessions" | grep -v "^${current_session}$" || true)
+
     if [ -z "$all_sessions" ]; then
-        # No sessions exist, create a new one based on directory
+        # No sessions exist (or only current session), create a new one based on directory
         FLOAX_SESSION_NAME=$(generate_session_name "$current_dir")
     else
         if command -v fzf >/dev/null 2>&1; then
