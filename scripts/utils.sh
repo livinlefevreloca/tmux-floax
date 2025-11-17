@@ -10,14 +10,22 @@ generate_session_name() {
     local current_path="$1"
     local depth="${2:-2}"  # Default to last 2 components
 
+    debug_log "generate_session_name called with: $current_path"
+
     # Get last N components of the path
     local session_suffix=$(echo "$current_path" | awk -F/ -v n="$depth" '{for(i=NF-n+1;i<=NF;i++){printf "%s", $i; if(i<NF)printf "-"}}')
+
+    debug_log "session_suffix after awk: $session_suffix"
 
     # Sanitize: replace any non-alphanumeric chars with hyphens
     session_suffix=$(echo "$session_suffix" | tr -cs '[:alnum:]-' '-' | sed 's/^-//;s/-$//')
 
+    debug_log "session_suffix after sanitize: $session_suffix"
+
     # Return prefixed session name
-    echo "floax-${session_suffix}"
+    local result="floax-${session_suffix}"
+    debug_log "final result: $result"
+    echo "$result"
 }
 
 tmux_option_or_fallback() {
@@ -82,18 +90,25 @@ is_tmux_version_supported() {
 }
 
 tmux_popup() {
-    # Get current directory and generate session name
-    current_dir=$(tmux display -p '#{pane_current_path}')
-    FLOAX_SESSION_NAME=$(generate_session_name "$current_dir")
+    local session_name="$1"
 
-    # Store the session name globally for other functions to use
-    tmux setenv -g FLOAX_SESSION_NAME "$FLOAX_SESSION_NAME"
+    # For backward compatibility, generate session name if not provided
+    if [ -z "$session_name" ]; then
+        session_name=$(envvar_value FLOAX_SESSION_NAME)
+        if [ -z "$session_name" ]; then
+            local current_dir=$(tmux display -p '#{pane_current_path}')
+            session_name=$(generate_session_name "$current_dir")
+        fi
+    fi
+
+    # Store it globally for other functions
+    tmux setenv -g FLOAX_SESSION_NAME "$session_name"
 
     if is_tmux_version_supported; then
-        if ! pop; then
+        if ! pop "$session_name"; then
             tmux setenv -g FLOAX_WIDTH "$(tmux_option_or_fallback '@floax-width' '80%')"
             tmux setenv -g FLOAX_HEIGHT "$(tmux_option_or_fallback '@floax-height' '80%')"
-            pop
+            pop "$session_name"
         fi
     else
         tmux display-message \
@@ -103,6 +118,8 @@ tmux_popup() {
 }
 
 pop() {
+    local session_name="$1"
+
     FLOAX_WIDTH=$(envvar_value FLOAX_WIDTH)
     FLOAX_HEIGHT=$(envvar_value FLOAX_HEIGHT)
 
@@ -111,12 +128,16 @@ pop() {
         FLOAX_TITLE="$DEFAULT_TITLE"
     fi
 
-    FLOAX_SESSION_NAME=$(envvar_value FLOAX_SESSION_NAME)
-    if [ -z "$FLOAX_SESSION_NAME" ]; then
-        FLOAX_SESSION_NAME="$DEFAULT_SESSION_NAME"
+    debug_log "pop() called with session: $session_name"
+    debug_log "Checking if session exists..."
+    if tmux has-session -t "$session_name" 2>/dev/null; then
+        debug_log "Session $session_name exists!"
+    else
+        debug_log "ERROR: Session $session_name does NOT exist!"
     fi
 
-    tmux set-option -t "$FLOAX_SESSION_NAME" detach-on-destroy on
+    tmux set-option -t "$session_name" detach-on-destroy on
+    debug_log "About to attach to session: $session_name"
     tmux popup \
         -S fg="$FLOAX_BORDER_COLOR" \
         -s fg="$FLOAX_TEXT_COLOR" \
@@ -125,5 +146,5 @@ pop() {
         -h "$FLOAX_HEIGHT" \
         -b rounded \
         -E \
-        "tmux attach-session -t \"$FLOAX_SESSION_NAME\"" 
+        "tmux attach-session -t \"$session_name\""
 }
