@@ -287,7 +287,8 @@ else
                         --prompt="Select window: " \
                         --height=80% \
                         --reverse \
-                        --preview="bash -c 'tmux capture-pane -ep -t ${FLOAX_SESSION_NAME}:\$(echo {} | cut -d: -f1)'" \
+                        --delimiter=':' \
+                        --preview="tmux capture-pane -ep -t ${FLOAX_SESSION_NAME}:{1}" \
                         --preview-window=right:60%)
                     if [ -z "$selected" ]; then
                         echo "[$(date '+%H:%M:%S')] User cancelled fzf, exiting" >> "$DEBUG_FILE"
