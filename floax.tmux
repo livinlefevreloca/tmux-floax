@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
 
 CURRENT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-source "$CURRENT_DIR/scripts/utils.sh"
+SCRIPTS_DIR="$CURRENT_DIR/scripts"
 
-tmux bind-key $(tmux_option_or_fallback "@floax-bind" "p") run-shell "$CURRENT_DIR/scripts/floax.sh"
-tmux bind-key "$(tmux_option_or_fallback "@floax-bind-menu" "P")" run-shell "$CURRENT_DIR/scripts/menu.sh"
+source "$SCRIPTS_DIR/utils.sh"
+
+tmux bind-key $(tmux_option_or_fallback "@floax-bind" "p") run-shell "$SCRIPTS_DIR/floax.sh"
+tmux bind-key "$(tmux_option_or_fallback "@floax-bind-menu" "P")" run-shell "$SCRIPTS_DIR/menu.sh"
 
 # Keybindings for fzf selection (uses display-popup for interactivity)
-tmux bind-key a run-shell "$CURRENT_DIR/scripts/floax-select.sh -l"
-tmux bind-key A run-shell "$CURRENT_DIR/scripts/floax-select.sh -a"
+tmux bind-key a run-shell "$SCRIPTS_DIR/floax-select.sh -l"
+tmux bind-key A run-shell "$SCRIPTS_DIR/floax-select.sh -a"
 
 tmux setenv -g FLOAX_WIDTH "$(tmux_option_or_fallback '@floax-width' '80%')" 
 tmux setenv -g FLOAX_HEIGHT "$(tmux_option_or_fallback '@floax-height' '80%')" 
