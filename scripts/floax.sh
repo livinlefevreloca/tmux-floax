@@ -72,6 +72,8 @@ debug_log() {
 
 # Always log keybinding invocations to help debug toggle issues
 echo "[$(date '+%H:%M:%S')] === FLOAX INVOKED ===" >> "$DEBUG_FILE"
+echo "[$(date '+%H:%M:%S')] Args: $*" >> "$DEBUG_FILE"
+echo "[$(date '+%H:%M:%S')] Arg count: $#" >> "$DEBUG_FILE"
 
 # Parse arguments
 custom_session=""
@@ -80,6 +82,7 @@ force_new=false
 list_all=false
 replace=false
 
+echo "[$(date '+%H:%M:%S')] Starting argument parsing" >> "$DEBUG_FILE"
 while [[ $# -gt 0 ]]; do
     case $1 in
         -h|--help)
@@ -113,6 +116,9 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+echo "[$(date '+%H:%M:%S')] Finished argument parsing" >> "$DEBUG_FILE"
+echo "[$(date '+%H:%M:%S')] command='$command' custom_session='$custom_session' force_new=$force_new list_all=$list_all replace=$replace" >> "$DEBUG_FILE"
+
 # Find all existing floax sessions for a base session name
 find_matching_sessions() {
     local base_name="$1"
@@ -140,7 +146,9 @@ find_next_session_number() {
 }
 
 # Generate session name based on current directory or use custom session
+echo "[$(date '+%H:%M:%S')] Getting current directory" >> "$DEBUG_FILE"
 current_dir=$(tmux display-message -p '#{pane_current_path}')
+echo "[$(date '+%H:%M:%S')] current_dir='$current_dir'" >> "$DEBUG_FILE"
 
 # Handle replace flag - kill all existing sessions for this directory/name and create a new one
 if [ "$replace" = true ]; then
