@@ -86,6 +86,7 @@ force_new=false
 list_all=false
 list_dir=false
 replace=false
+print_only=false
 
 echo "[$(date '+%H:%M:%S')] Starting argument parsing" >> "$DEBUG_FILE"
 while [[ $# -gt 0 ]]; do
@@ -115,6 +116,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         -r|--replace)
             replace=true
+            shift
+            ;;
+        --print-only)
+            print_only=true
             shift
             ;;
         *)
@@ -334,6 +339,12 @@ echo "[$(date '+%H:%M:%S')] Target FLOAX_SESSION_NAME: $FLOAX_SESSION_NAME" >> "
 echo "[$(date '+%H:%M:%S')] Target FLOAX_WINDOW_INDEX: $FLOAX_WINDOW_INDEX" >> "$DEBUG_FILE"
 debug_log "Target FLOAX_SESSION_NAME: $FLOAX_SESSION_NAME"
 debug_log "Target FLOAX_WINDOW_INDEX: $FLOAX_WINDOW_INDEX"
+
+# If print-only mode, just output the session:window and exit
+if [ "$print_only" = true ]; then
+    echo "${FLOAX_SESSION_NAME}:${FLOAX_WINDOW_INDEX}"
+    exit 0
+fi
 
 tmux setenv -g ORIGIN_SESSION "$current_session"
 

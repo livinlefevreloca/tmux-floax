@@ -28,6 +28,15 @@ Standard menu options (followed by their hotkey):
 - Reset: Sets the pane's size back to the default settings
 - Embed: sends the floating panes window to the working space under it
 
+## Additional Keybindings 🎯
+
+FloaX includes keybindings for interactive window/session selection using fzf:
+
+- **`<prefix> + a`**: List and select from windows in the current directory session with live preview
+- **`<prefix> + A`**: List and select from all tmux sessions with live preview
+
+These work by opening an fzf selection popup, then attaching to your chosen window/session in the floax popup.
+
 ## Configure ⚙️
 
 The default binding for this plugin is `<prefix>+p` (and `<prefix>+P` for the internal menu)
