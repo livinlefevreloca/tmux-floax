@@ -60,6 +60,7 @@ BEHAVIOR:
     - Multiple windows: Use -l to show fzf menu with live preview (requires fzf)
     - Session naming: Based on last 2 directory components (e.g., floax-my-project)
     - Windows: -n flag creates new windows within the same session
+    - State tracking: Remembers last used window per session and reattaches to it
 
 EOF
     exit 0
@@ -250,8 +251,15 @@ elif [ "$list_all" = true ]; then
             # fzf not available, just use the first one
             FLOAX_SESSION_NAME=$(echo "$all_sessions" | head -n 1)
         fi
-        # When selecting from all sessions, attach to first window
-        FLOAX_WINDOW_INDEX="0"
+        # When selecting from all sessions, attach to last used window for that session
+        last_window=$(get_last_window "$FLOAX_SESSION_NAME")
+        if [ -n "$last_window" ]; then
+            echo "[$(date '+%H:%M:%S')] Found last window for $FLOAX_SESSION_NAME: $last_window" >> "$DEBUG_FILE"
+            FLOAX_WINDOW_INDEX="$last_window"
+        else
+            echo "[$(date '+%H:%M:%S')] No last window found for $FLOAX_SESSION_NAME, using window 0" >> "$DEBUG_FILE"
+            FLOAX_WINDOW_INDEX="0"
+        fi
     fi
 elif [ -n "$custom_session" ]; then
     echo "[$(date '+%H:%M:%S')] Custom session specified: $custom_session" >> "$DEBUG_FILE"
@@ -262,8 +270,15 @@ elif [ -n "$custom_session" ]; then
         # Force create a new window in the session
         FLOAX_WINDOW_INDEX=$(find_next_window_index "$FLOAX_SESSION_NAME")
     else
-        echo "[$(date '+%H:%M:%S')] Using custom session, window 0" >> "$DEBUG_FILE"
-        FLOAX_WINDOW_INDEX="0"
+        # Check for last used window
+        last_window=$(get_last_window "$FLOAX_SESSION_NAME")
+        if [ -n "$last_window" ]; then
+            echo "[$(date '+%H:%M:%S')] Found last window for $FLOAX_SESSION_NAME: $last_window" >> "$DEBUG_FILE"
+            FLOAX_WINDOW_INDEX="$last_window"
+        else
+            echo "[$(date '+%H:%M:%S')] No last window found for $FLOAX_SESSION_NAME, using window 0" >> "$DEBUG_FILE"
+            FLOAX_WINDOW_INDEX="0"
+        fi
     fi
 else
     echo "[$(date '+%H:%M:%S')] No custom session, generating from directory" >> "$DEBUG_FILE"
