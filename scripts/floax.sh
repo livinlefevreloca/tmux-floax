@@ -17,7 +17,8 @@ OPTIONS:
     -s, --session NAME  Attach to or create a specific named session
     -n, --new           Force create a new window in the session
     -l, --list          List windows in directory session with fzf preview and select one
-    -a, --all           List ALL tmux sessions with fzf preview and select one
+    -a, --all           List ALL windows across all tmux sessions with fzf preview and select one
+                        Number keys (0-9) can be pressed to quick-select by window index
     -r, --replace       Kill the existing session for this directory/name and create fresh
 
 COMMAND:
@@ -224,7 +225,7 @@ if [ "$replace" = true ]; then
     :
 elif [ "$list_all" = true ]; then
     echo "[$(date '+%H:%M:%S')] List all is true" >> "$DEBUG_FILE"
-    # List all tmux sessions and let user choose
+    # List all windows across all tmux sessions
     all_sessions=$(tmux list-sessions -F "#{session_name}" 2>/dev/null)
 
     # Filter out the current session to avoid recursion
@@ -236,28 +237,39 @@ elif [ "$list_all" = true ]; then
         FLOAX_SESSION_NAME=$(generate_session_name "$current_dir")
         FLOAX_WINDOW_INDEX="0"
     else
+        # Build a list of all windows across all sessions
+        # Format: "session_name:window_index [window_index] window_name"
+        all_windows=""
+        while IFS= read -r session; do
+            windows=$(tmux list-windows -t "$session" -F "[#{window_index}] #{window_name}" 2>/dev/null)
+            while IFS= read -r window; do
+                # Extract window index from [0] format
+                window_idx=$(echo "$window" | grep -o '^\[[0-9]\+\]' | tr -d '[]')
+                all_windows="${all_windows}${session}:${window_idx} ${window}"$'\n'
+            done <<< "$windows"
+        done <<< "$all_sessions"
+
         if command -v fzf >/dev/null 2>&1; then
-            FLOAX_SESSION_NAME=$(echo "$all_sessions" | fzf \
-                --prompt="Select session: " \
+            # Bind number keys 0-9 to select matching window index
+            selected=$(echo "$all_windows" | fzf \
+                --prompt="Select session:window: " \
                 --height=80% \
                 --reverse \
-                --preview="tmux capture-pane -ep -t {}" \
-                --preview-window=right:60%)
-            if [ -z "$FLOAX_SESSION_NAME" ]; then
+                --delimiter=':' \
+                --with-nth=1.. \
+                --preview="tmux capture-pane -ep -t {1}:{2}" \
+                --preview-window=right:60% \
+                --bind='0:accept,1:accept,2:accept,3:accept,4:accept,5:accept,6:accept,7:accept,8:accept,9:accept')
+            if [ -z "$selected" ]; then
                 # User cancelled fzf, exit
                 exit 0
             fi
+            # Parse the selection: "session:window_index [window_index] window_name"
+            FLOAX_SESSION_NAME=$(echo "$selected" | cut -d':' -f1)
+            FLOAX_WINDOW_INDEX=$(echo "$selected" | cut -d':' -f2 | cut -d' ' -f1)
         else
-            # fzf not available, just use the first one
+            # fzf not available, just use the first window of the first session
             FLOAX_SESSION_NAME=$(echo "$all_sessions" | head -n 1)
-        fi
-        # When selecting from all sessions, attach to last used window for that session
-        last_window=$(get_last_window "$FLOAX_SESSION_NAME")
-        if [ -n "$last_window" ]; then
-            echo "[$(date '+%H:%M:%S')] Found last window for $FLOAX_SESSION_NAME: $last_window" >> "$DEBUG_FILE"
-            FLOAX_WINDOW_INDEX="$last_window"
-        else
-            echo "[$(date '+%H:%M:%S')] No last window found for $FLOAX_SESSION_NAME, using window 0" >> "$DEBUG_FILE"
             FLOAX_WINDOW_INDEX="0"
         fi
     fi
