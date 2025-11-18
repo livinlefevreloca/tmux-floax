@@ -18,7 +18,6 @@ OPTIONS:
     -n, --new           Force create a new window in the session
     -l, --list          List windows in directory session with fzf preview and select one
     -a, --all           List ALL windows across all tmux sessions with fzf preview and select one
-                        Number keys (0-9) can be pressed to quick-select by window index
     -r, --replace       Kill the existing session for this directory/name and create fresh
 
 COMMAND:
@@ -238,35 +237,29 @@ elif [ "$list_all" = true ]; then
         FLOAX_WINDOW_INDEX="0"
     else
         # Build a list of all windows across all sessions
-        # Format: "session_name:window_index [window_index] window_name"
+        # Format: "session_name window_index [window_index] window_name"
         all_windows=""
         while IFS= read -r session; do
-            windows=$(tmux list-windows -t "$session" -F "[#{window_index}] #{window_name}" 2>/dev/null)
+            windows=$(tmux list-windows -t "$session" -F "#{window_index} [#{window_index}] #{window_name}" 2>/dev/null)
             while IFS= read -r window; do
-                # Extract window index from [0] format
-                window_idx=$(echo "$window" | grep -o '^\[[0-9]\+\]' | tr -d '[]')
-                all_windows="${all_windows}${session}:${window_idx} ${window}"$'\n'
+                all_windows="${all_windows}${session} ${window}"$'\n'
             done <<< "$windows"
         done <<< "$all_sessions"
 
         if command -v fzf >/dev/null 2>&1; then
-            # Bind number keys 0-9 to select matching window index
             selected=$(echo "$all_windows" | fzf \
                 --prompt="Select session:window: " \
                 --height=80% \
                 --reverse \
-                --delimiter=':' \
-                --with-nth=1.. \
                 --preview="tmux capture-pane -ep -t {1}:{2}" \
-                --preview-window=right:60% \
-                --bind='0:accept,1:accept,2:accept,3:accept,4:accept,5:accept,6:accept,7:accept,8:accept,9:accept')
+                --preview-window=right:60%)
             if [ -z "$selected" ]; then
                 # User cancelled fzf, exit
                 exit 0
             fi
-            # Parse the selection: "session:window_index [window_index] window_name"
-            FLOAX_SESSION_NAME=$(echo "$selected" | cut -d':' -f1)
-            FLOAX_WINDOW_INDEX=$(echo "$selected" | cut -d':' -f2 | cut -d' ' -f1)
+            # Parse the selection: "session window_index [window_index] window_name"
+            FLOAX_SESSION_NAME=$(echo "$selected" | awk '{print $1}')
+            FLOAX_WINDOW_INDEX=$(echo "$selected" | awk '{print $2}')
         else
             # fzf not available, just use the first window of the first session
             FLOAX_SESSION_NAME=$(echo "$all_sessions" | head -n 1)

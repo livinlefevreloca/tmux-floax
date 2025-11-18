@@ -34,8 +34,7 @@ FloaX includes keybindings for interactive window/session selection using fzf:
 
 - **`<prefix> + a`**: List and select from windows in the current directory session with live preview
 - **`<prefix> + A`**: List and select from ALL windows across ALL tmux sessions with live preview
-  - Shows every window in format: `session:window_index [index] window_name`
-  - Press number keys (0-9) to quick-select by window index
+  - Shows every window in format: `session window_index [index] window_name`
   - Live preview shows the actual window content
 
 These work by opening an fzf selection popup, then attaching to your chosen window/session in the floax popup.
