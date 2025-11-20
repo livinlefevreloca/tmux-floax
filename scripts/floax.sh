@@ -60,7 +60,7 @@ BEHAVIOR:
     - Multiple windows: Use -l to show fzf menu with live preview (requires fzf)
     - Session naming: Based on last 2 directory components (e.g., floax-my-project)
     - Windows: -n flag creates new windows within the same session
-    - State tracking: Remembers last used window per session and reattaches to it
+    - Window selection: Uses tmux's last active window by default
 
 EOF
     exit 0
@@ -275,15 +275,9 @@ elif [ -n "$custom_session" ]; then
         # Force create a new window in the session
         FLOAX_WINDOW_INDEX=$(find_next_window_index "$FLOAX_SESSION_NAME")
     else
-        # Check for last used window
-        last_window=$(get_last_window "$FLOAX_SESSION_NAME")
-        if [ -n "$last_window" ]; then
-            echo "[$(date '+%H:%M:%S')] Found last window for $FLOAX_SESSION_NAME: $last_window" >> "$DEBUG_FILE"
-            FLOAX_WINDOW_INDEX="$last_window"
-        else
-            echo "[$(date '+%H:%M:%S')] No last window found for $FLOAX_SESSION_NAME, using window 0" >> "$DEBUG_FILE"
-            FLOAX_WINDOW_INDEX="0"
-        fi
+        # Use tmux's last active window
+        echo "[$(date '+%H:%M:%S')] Using last active window (@)" >> "$DEBUG_FILE"
+        FLOAX_WINDOW_INDEX="@"
     fi
 else
     echo "[$(date '+%H:%M:%S')] No custom session, generating from directory" >> "$DEBUG_FILE"
@@ -326,18 +320,10 @@ else
                     FLOAX_WINDOW_INDEX="0"
                 fi
             else
-                # Default: attach to last used window, or first window if no state
-                echo "[$(date '+%H:%M:%S')] Checking for last used window" >> "$DEBUG_FILE"
-                last_window=$(get_last_window "$FLOAX_SESSION_NAME")
-                if [ -n "$last_window" ]; then
-                    echo "[$(date '+%H:%M:%S')] Found last used window: $last_window" >> "$DEBUG_FILE"
-                    debug_log "Using last used window: $last_window"
-                    FLOAX_WINDOW_INDEX="$last_window"
-                else
-                    echo "[$(date '+%H:%M:%S')] No last window found, using window 0" >> "$DEBUG_FILE"
-                    debug_log "No last window found, using first window"
-                    FLOAX_WINDOW_INDEX="0"
-                fi
+                # Default: attach to tmux's last active window
+                echo "[$(date '+%H:%M:%S')] Using last active window (@)" >> "$DEBUG_FILE"
+                debug_log "Using last active window"
+                FLOAX_WINDOW_INDEX="@"
             fi
         else
             debug_log "No existing session, will create at window 0"
