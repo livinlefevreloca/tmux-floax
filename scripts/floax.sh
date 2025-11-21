@@ -367,12 +367,15 @@ debug_log "Not in a floax session, proceeding..."
 set_bindings
 
 # Check if the session exists
+echo "[$(date '+%H:%M:%S')] Checking if session $FLOAX_SESSION_NAME exists..." >> "$DEBUG_FILE"
 debug_log "Checking if session $FLOAX_SESSION_NAME exists..."
 if tmux has-session -t "$FLOAX_SESSION_NAME" 2>/dev/null; then
+    echo "[$(date '+%H:%M:%S')] Session EXISTS" >> "$DEBUG_FILE"
     debug_log "Session EXISTS"
 
     # If using @ (last active window), skip window creation logic
     if [ "$FLOAX_WINDOW_INDEX" = "@" ]; then
+        echo "[$(date '+%H:%M:%S')] Using @ symbol, skipping window checks" >> "$DEBUG_FILE"
         debug_log "Using last active window (@), skipping window checks"
         # If command provided, send it to the active window
         if [ -n "$command" ]; then
@@ -395,8 +398,11 @@ if tmux has-session -t "$FLOAX_SESSION_NAME" 2>/dev/null; then
             fi
         fi
     fi
+    echo "[$(date '+%H:%M:%S')] About to call tmux_popup with: $FLOAX_SESSION_NAME:$FLOAX_WINDOW_INDEX" >> "$DEBUG_FILE"
     tmux_popup "$FLOAX_SESSION_NAME" "$FLOAX_WINDOW_INDEX"
+    echo "[$(date '+%H:%M:%S')] Returned from tmux_popup" >> "$DEBUG_FILE"
 else
+    echo "[$(date '+%H:%M:%S')] Session DOES NOT EXIST, creating..." >> "$DEBUG_FILE"
     debug_log "Session DOES NOT EXIST, creating..."
     # Create a new session for this directory
     debug_log "Creating new session: $FLOAX_SESSION_NAME in directory: $current_dir"
@@ -409,6 +415,8 @@ else
     fi
     debug_log "Session creation result: $?"
     tmux set-option -t "$FLOAX_SESSION_NAME" status off
+    echo "[$(date '+%H:%M:%S')] About to call tmux_popup with: $FLOAX_SESSION_NAME:$FLOAX_WINDOW_INDEX" >> "$DEBUG_FILE"
     debug_log "Calling tmux_popup with session: $FLOAX_SESSION_NAME, window: $FLOAX_WINDOW_INDEX"
     tmux_popup "$FLOAX_SESSION_NAME" "$FLOAX_WINDOW_INDEX"
+    echo "[$(date '+%H:%M:%S')] Returned from tmux_popup" >> "$DEBUG_FILE"
 fi
