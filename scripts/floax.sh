@@ -275,9 +275,16 @@ elif [ -n "$custom_session" ]; then
         # Force create a new window in the session
         FLOAX_WINDOW_INDEX=$(find_next_window_index "$FLOAX_SESSION_NAME")
     else
-        # Use tmux's last active window
-        echo "[$(date '+%H:%M:%S')] Using last active window (@)" >> "$DEBUG_FILE"
-        FLOAX_WINDOW_INDEX="@"
+        # Check if session exists
+        if tmux has-session -t "$FLOAX_SESSION_NAME" 2>/dev/null; then
+            # Session exists, use tmux's last active window
+            echo "[$(date '+%H:%M:%S')] Session exists, using last active window (@)" >> "$DEBUG_FILE"
+            FLOAX_WINDOW_INDEX="@"
+        else
+            # Session doesn't exist yet, will create at window 0
+            echo "[$(date '+%H:%M:%S')] Session doesn't exist, will create at window 0" >> "$DEBUG_FILE"
+            FLOAX_WINDOW_INDEX="0"
+        fi
     fi
 else
     echo "[$(date '+%H:%M:%S')] No custom session, generating from directory" >> "$DEBUG_FILE"
@@ -320,7 +327,7 @@ else
                     FLOAX_WINDOW_INDEX="0"
                 fi
             else
-                # Default: attach to tmux's last active window
+                # Default: attach to tmux's last active window (session exists)
                 echo "[$(date '+%H:%M:%S')] Using last active window (@)" >> "$DEBUG_FILE"
                 debug_log "Using last active window"
                 FLOAX_WINDOW_INDEX="@"
@@ -363,19 +370,29 @@ set_bindings
 debug_log "Checking if session $FLOAX_SESSION_NAME exists..."
 if tmux has-session -t "$FLOAX_SESSION_NAME" 2>/dev/null; then
     debug_log "Session EXISTS"
-    # Session exists - check if we need to create a new window
-    if ! tmux list-windows -t "$FLOAX_SESSION_NAME" -F "#{window_index}" | grep -q "^${FLOAX_WINDOW_INDEX}$"; then
-        debug_log "Window $FLOAX_WINDOW_INDEX does not exist, creating new window"
+
+    # If using @ (last active window), skip window creation logic
+    if [ "$FLOAX_WINDOW_INDEX" = "@" ]; then
+        debug_log "Using last active window (@), skipping window checks"
+        # If command provided, send it to the active window
         if [ -n "$command" ]; then
-            tmux new-window -t "$FLOAX_SESSION_NAME:$FLOAX_WINDOW_INDEX" -c "$current_dir" "$command"
-        else
-            tmux new-window -t "$FLOAX_SESSION_NAME:$FLOAX_WINDOW_INDEX" -c "$current_dir"
+            tmux send-keys -t "$FLOAX_SESSION_NAME:@" "$command" Enter
         fi
     else
-        debug_log "Window $FLOAX_WINDOW_INDEX exists"
-        # Window exists - if command provided, send it to the window
-        if [ -n "$command" ]; then
-            tmux send-keys -t "$FLOAX_SESSION_NAME:$FLOAX_WINDOW_INDEX" "$command" Enter
+        # Session exists - check if we need to create a new window
+        if ! tmux list-windows -t "$FLOAX_SESSION_NAME" -F "#{window_index}" | grep -q "^${FLOAX_WINDOW_INDEX}$"; then
+            debug_log "Window $FLOAX_WINDOW_INDEX does not exist, creating new window"
+            if [ -n "$command" ]; then
+                tmux new-window -t "$FLOAX_SESSION_NAME:$FLOAX_WINDOW_INDEX" -c "$current_dir" "$command"
+            else
+                tmux new-window -t "$FLOAX_SESSION_NAME:$FLOAX_WINDOW_INDEX" -c "$current_dir"
+            fi
+        else
+            debug_log "Window $FLOAX_WINDOW_INDEX exists"
+            # Window exists - if command provided, send it to the window
+            if [ -n "$command" ]; then
+                tmux send-keys -t "$FLOAX_SESSION_NAME:$FLOAX_WINDOW_INDEX" "$command" Enter
+            fi
         fi
     fi
     tmux_popup "$FLOAX_SESSION_NAME" "$FLOAX_WINDOW_INDEX"
