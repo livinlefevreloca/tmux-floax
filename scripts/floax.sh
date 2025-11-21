@@ -377,10 +377,7 @@ if tmux has-session -t "$FLOAX_SESSION_NAME" 2>/dev/null; then
     if [ "$FLOAX_WINDOW_INDEX" = "@" ]; then
         echo "[$(date '+%H:%M:%S')] Using @ symbol, skipping window checks" >> "$DEBUG_FILE"
         debug_log "Using last active window (@), skipping window checks"
-        # If command provided, send it to the active window
-        if [ -n "$command" ]; then
-            tmux send-keys -t "$FLOAX_SESSION_NAME:@" "$command" Enter
-        fi
+        # Note: commands are not sent when using @, user can run them after attaching
     else
         # Session exists - check if we need to create a new window
         if ! tmux list-windows -t "$FLOAX_SESSION_NAME" -F "#{window_index}" | grep -q "^${FLOAX_WINDOW_INDEX}$"; then

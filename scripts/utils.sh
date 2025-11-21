@@ -121,7 +121,15 @@ tmux_popup() {
 pop() {
     local session_name="$1"
     local window_index="${2:-0}"  # Default to window 0 if not specified
-    local target="${session_name}:${window_index}"
+
+    # When using @ (last active window), don't specify window in target
+    # Tmux will automatically attach to the last active window
+    local target
+    if [ "$window_index" = "@" ]; then
+        target="${session_name}"
+    else
+        target="${session_name}:${window_index}"
+    fi
 
     FLOAX_WIDTH=$(envvar_value FLOAX_WIDTH)
     FLOAX_HEIGHT=$(envvar_value FLOAX_HEIGHT)
