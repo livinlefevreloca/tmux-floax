@@ -6,6 +6,7 @@ envvar_value() {
 
 # Generate a session name based on the current directory
 # Uses the last 2 path components, sanitized
+# NOTE: This is kept for backward compatibility with custom session names
 generate_session_name() {
     local current_path="$1"
     local depth="${2:-2}"  # Default to last 2 components
@@ -24,6 +25,23 @@ generate_session_name() {
 
     # Return prefixed session name
     local result="floax-${session_suffix}"
+    debug_log "final result: $result"
+    echo "$result"
+}
+
+# Generate a session name based on the current tmux session and window
+# This ties floax sessions to specific windows instead of directories
+generate_session_name_from_window() {
+    local session_name="$1"
+    local window_index="$2"
+
+    debug_log "generate_session_name_from_window called with session: $session_name, window: $window_index"
+
+    # Sanitize session name: replace any non-alphanumeric chars with hyphens
+    local sanitized_session=$(echo "$session_name" | tr -cs '[:alnum:]-' '-' | sed 's/^-//;s/-$//')
+
+    # Build floax session name: floax-{session}-w{window}
+    local result="floax-${sanitized_session}-w${window_index}"
     debug_log "final result: $result"
     echo "$result"
 }

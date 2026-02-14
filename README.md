@@ -32,12 +32,19 @@ Standard menu options (followed by their hotkey):
 
 FloaX includes keybindings for interactive window/session selection using fzf:
 
-- **`<prefix> + a`**: List and select from windows in the current directory session with live preview
+- **`<prefix> + a`**: List and select from windows in the current floax session with live preview
 - **`<prefix> + A`**: List and select from ALL windows across ALL tmux sessions with live preview
   - Shows every window in format: `session window_index [index] window_name`
   - Live preview shows the actual window content
 
 These work by opening an fzf selection popup, then attaching to your chosen window/session in the floax popup.
+
+## Behavior
+
+FloaX now associates floax sessions with **specific tmux windows** instead of directories:
+- Each window in your tmux session gets its own dedicated floax session
+- Opening floax in "main:0" (session "main", window 0) will always open the same floax session
+- This means you can have different floax environments for different windows in the same directory
 
 ## Configure ⚙️
 
@@ -83,14 +90,15 @@ set -g @floax-border-color 'magenta'
 # Optional colors are as shown above in @floax-border-color
 set -g @floax-text-color 'blue'
 
-# By default when floax sees a change in session path 
+# By default when floax sees a change in session path
 # it'll change the floating pane's path
 # You can disable this by setting it to false
 # You could also "cd -" when the pane is toggled to go back
 set -g @floax-change-path 'true'
 
 # The default session name of the floating pane is 'scratch'
-# You can modify the session name with this option:
+# NOTE: FloaX now uses window-based session naming by default (floax-{session}-w{window})
+# This option only affects custom sessions created with -s flag
 set -g @floax-session-name 'some-other-session-name'
 
 # Change the title of the floating window

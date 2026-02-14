@@ -25,7 +25,7 @@ COMMAND:
     If no command is provided, opens a shell.
 
 EXAMPLES:
-    # Open default floax session for current directory
+    # Open default floax session for current window
     floax.sh
 
     # Open with a command
@@ -37,7 +37,7 @@ EXAMPLES:
     # Attach to a named session
     floax.sh -s myproject
 
-    # Replace session for current directory
+    # Replace session for current window
     floax.sh -r
 
     # List windows and choose
@@ -56,10 +56,10 @@ EXAMPLES:
     floax.sh -d
 
 BEHAVIOR:
-    - Without options: Reuses existing directory session or creates new
+    - Without options: Each tmux window gets its own floax session
     - Multiple windows: Use -l to show fzf menu with live preview (requires fzf)
-    - Session naming: Based on last 2 directory components (e.g., floax-my-project)
-    - Windows: -n flag creates new windows within the same session
+    - Session naming: Based on current session and window (e.g., floax-main-w0)
+    - Windows: -n flag creates new windows within the same floax session
     - Window selection: Uses tmux's last active window by default
 
 EOF
@@ -193,17 +193,19 @@ fi
 # Not in a floax session, so proceed with session determination
 echo "[$(date '+%H:%M:%S')] Not in floax session, proceeding with session determination" >> "$DEBUG_FILE"
 
-# Generate session name based on current directory or use custom session
-echo "[$(date '+%H:%M:%S')] Getting current directory" >> "$DEBUG_FILE"
+# Get current session and window info for session-window based naming
+echo "[$(date '+%H:%M:%S')] Getting current session and window info" >> "$DEBUG_FILE"
 current_dir=$(tmux display-message -p '#{pane_current_path}')
+current_window_index=$(tmux display-message -p '#{window_index}')
 echo "[$(date '+%H:%M:%S')] current_dir='$current_dir'" >> "$DEBUG_FILE"
+echo "[$(date '+%H:%M:%S')] current_window_index='$current_window_index'" >> "$DEBUG_FILE"
 
-# Handle replace flag - kill the existing session for this directory/name and create a new one
+# Handle replace flag - kill the existing session for this window/name and create a new one
 if [ "$replace" = true ]; then
     if [ -n "$custom_session" ]; then
         base_session_name="$custom_session"
     else
-        base_session_name=$(generate_session_name "$current_dir")
+        base_session_name=$(generate_session_name_from_window "$current_session" "$current_window_index")
     fi
 
     # Kill the session if it exists
@@ -227,13 +229,13 @@ elif [ "$list_all" = true ]; then
     # List all windows across all tmux sessions
     all_sessions=$(tmux list-sessions -F "#{session_name}" 2>/dev/null)
 
-    # Filter out the current session to avoid recursion
-    echo "[$(date '+%H:%M:%S')] Filtering out current session: $current_session" >> "$DEBUG_FILE"
-    all_sessions=$(echo "$all_sessions" | grep -v "^${current_session}$" || true)
+    # Filter out the current session AND floax sessions to avoid recursion
+    echo "[$(date '+%H:%M:%S')] Filtering out current session and floax sessions: $current_session" >> "$DEBUG_FILE"
+    all_sessions=$(echo "$all_sessions" | grep -v "^${current_session}$" | grep -v "^floax-" || true)
 
     if [ -z "$all_sessions" ]; then
-        # No sessions exist (or only current session), create a new one based on directory
-        FLOAX_SESSION_NAME=$(generate_session_name "$current_dir")
+        # No sessions exist (or only current session), create a new one based on current window
+        FLOAX_SESSION_NAME=$(generate_session_name_from_window "$current_session" "$current_window_index")
         FLOAX_WINDOW_INDEX="0"
     else
         # Build a list of all windows across all sessions
@@ -287,9 +289,9 @@ elif [ -n "$custom_session" ]; then
         fi
     fi
 else
-    echo "[$(date '+%H:%M:%S')] No custom session, generating from directory" >> "$DEBUG_FILE"
-    debug_log "Calling generate_session_name with: $current_dir"
-    FLOAX_SESSION_NAME=$(generate_session_name "$current_dir")
+    echo "[$(date '+%H:%M:%S')] No custom session, generating from current session:window" >> "$DEBUG_FILE"
+    debug_log "Calling generate_session_name_from_window with session: $current_session, window: $current_window_index"
+    FLOAX_SESSION_NAME=$(generate_session_name_from_window "$current_session" "$current_window_index")
     echo "[$(date '+%H:%M:%S')] FLOAX_SESSION_NAME: $FLOAX_SESSION_NAME" >> "$DEBUG_FILE"
     debug_log "FLOAX_SESSION_NAME: $FLOAX_SESSION_NAME"
 
